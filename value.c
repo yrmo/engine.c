@@ -4,13 +4,15 @@
 typedef struct {
     PyObject_HEAD
     double data;
+    double grad;
 } ValueObject;
 
 static PyObject* Value_new(PyTypeObject *type, PyObject *args, PyObject *kwds) {
     ValueObject *self;
     self = (ValueObject *)type->tp_alloc(type, 0);
     if (self != NULL) {
-        self->data = 0.0f;
+        self->data = 0.0;
+        self->grad = 0.0;
     }
     return (PyObject *)self;
 }
@@ -20,13 +22,17 @@ static void Value_dealloc(ValueObject* self) {
 }
 
 static int Value_init(ValueObject *self, PyObject *args, PyObject *kwds) {
-    if (!PyArg_ParseTuple(args, "d", &self->data))
+    if (!PyArg_ParseTuple(args, "dd", &self->data))
         return -1;
     return 0;
 }
 
 static PyObject* Value_getdata(ValueObject* self, void* closure) {
     return PyFloat_FromDouble(self->data);
+}
+
+static PyObject* Value_getgrad(ValueObject* self, void* closure) {
+    return PyFloat_FromDouble(self->grad);
 }
 
 static int Value_setdata(ValueObject* self, PyObject* data, void* closure) {
@@ -46,15 +52,34 @@ static int Value_setdata(ValueObject* self, PyObject* data, void* closure) {
     return 0;
 }
 
+
+static int Value_setgrad(ValueObject* self, PyObject* grad, void* closure) {
+    if (grad == NULL) {
+        PyErr_SetString(PyExc_TypeError, "Cannot delete the grad attribute");
+        return -1;
+    }
+    if (PyFloat_Check(grad)) {
+        self->grad = PyFloat_AsDouble(grad);
+    } else if (PyLong_Check(grad)) {
+        self->grad = (double)PyLong_AsLong(grad);
+    } else {
+        PyErr_SetString(PyExc_TypeError, "The value attribute grad must be a float or an int");
+        return -1;
+    }
+    self->grad = PyFloat_AsDouble(grad);
+    return 0;
+}
+
 static PyGetSetDef Value_getseters[] = {
     {"data", (getter)Value_getdata, (setter)Value_setdata, "Value's data", NULL},
+    {"grad", (getter)Value_getgrad, (setter)Value_setgrad, "Value's grad", NULL},
     {NULL}  /* Sentinel */
 };
 
 static PyTypeObject ValueType = {
     PyVarObject_HEAD_INIT(NULL, 0)
     .tp_name = "value.Value",
-    .tp_doc = "Stores a floating point number",
+    .tp_doc = "Stores a floating point number and it's gradient",
     .tp_basicsize = sizeof(ValueObject),
     .tp_itemsize = 0,
     .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,

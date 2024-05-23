@@ -5,7 +5,7 @@ def show(v):
     assert type(v.grad) == float
     print(f"{v.data=}", f"{type(v.data)=}")
 
-v = Value(42, 0)
+v = Value(42)
 assert v.data == 42
 show(v)
 

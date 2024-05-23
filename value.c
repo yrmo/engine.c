@@ -22,8 +22,9 @@ static void Value_dealloc(ValueObject* self) {
 }
 
 static int Value_init(ValueObject *self, PyObject *args, PyObject *kwds) {
-    if (!PyArg_ParseTuple(args, "dd", &self->data))
+    if (!PyArg_ParseTuple(args, "d", &self->data))
         return -1;
+    self->grad = 0.0;
     return 0;
 }
 

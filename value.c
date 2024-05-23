@@ -3,14 +3,14 @@
 
 typedef struct {
     PyObject_HEAD
-    int value;
+    double data;
 } ValueObject;
 
 static PyObject* Value_new(PyTypeObject *type, PyObject *args, PyObject *kwds) {
     ValueObject *self;
     self = (ValueObject *)type->tp_alloc(type, 0);
     if (self != NULL) {
-        self->value = 0;
+        self->data = 0.0f;
     }
     return (PyObject *)self;
 }
@@ -20,37 +20,41 @@ static void Value_dealloc(ValueObject* self) {
 }
 
 static int Value_init(ValueObject *self, PyObject *args, PyObject *kwds) {
-    if (!PyArg_ParseTuple(args, "i", &self->value))
+    if (!PyArg_ParseTuple(args, "d", &self->data))
         return -1;
     return 0;
 }
 
-static PyObject* Value_getvalue(ValueObject* self, void* closure) {
-    return PyLong_FromLong(self->value);
+static PyObject* Value_getdata(ValueObject* self, void* closure) {
+    return PyFloat_FromDouble(self->data);
 }
 
-static int Value_setvalue(ValueObject* self, PyObject* value, void* closure) {
-    if (value == NULL) {
-        PyErr_SetString(PyExc_TypeError, "Cannot delete the value attribute");
+static int Value_setdata(ValueObject* self, PyObject* data, void* closure) {
+    if (data == NULL) {
+        PyErr_SetString(PyExc_TypeError, "Cannot delete the data attribute");
         return -1;
     }
-    if (!PyLong_Check(value)) {
-        PyErr_SetString(PyExc_TypeError, "The value attribute value must be an int");
+    if (PyFloat_Check(data)) {
+        self->data = PyFloat_AsDouble(data);
+    } else if (PyLong_Check(data)) {
+        self->data = (double)PyLong_AsLong(data);
+    } else {
+        PyErr_SetString(PyExc_TypeError, "The value attribute data must be a float or an int");
         return -1;
     }
-    self->value = PyLong_AsLong(value);
+    self->data = PyFloat_AsDouble(data);
     return 0;
 }
 
 static PyGetSetDef Value_getseters[] = {
-    {"value", (getter)Value_getvalue, (setter)Value_setvalue, "value", NULL},
+    {"data", (getter)Value_getdata, (setter)Value_setdata, "Value's data", NULL},
     {NULL}  /* Sentinel */
 };
 
 static PyTypeObject ValueType = {
     PyVarObject_HEAD_INIT(NULL, 0)
     .tp_name = "value.Value",
-    .tp_doc = "Value objects",
+    .tp_doc = "Stores a floating point number",
     .tp_basicsize = sizeof(ValueObject),
     .tp_itemsize = 0,
     .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,

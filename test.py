@@ -1,9 +1,13 @@
 from value import Value
 
-v = Value(42)
-print(f"{v.value=}")
-assert v.value == 42
+def show(v):
+    print(f"{v.data=}", f"{type(v.data)=}")
 
-v.value = 100
-print(f"{v.value=}")
-assert v.value == 100
+v = Value(42)
+show(v)
+assert v.data == 42
+
+v.data = 100
+v.data = 100.0
+show(v)
+assert v.data == 100

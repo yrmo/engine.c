@@ -3,9 +3,17 @@ from value import Value
 def show(v):
     assert type(v.data) == float
     assert type(v.grad) == float
+    print("-" * 40)
     print(f"{v.data=}", f"{type(v.data)=}")
+    print(f"{v.grad=}", f"{type(v.grad)=}")
+    print(f"{v._op=}", f"{type(v._op)=}")
 
 v = Value(42)
+assert v._op == ""
+show(v)
+
+v = Value(42, _op="Operation")
+assert v._op == "Operation"
 assert v.data == 42
 show(v)
 

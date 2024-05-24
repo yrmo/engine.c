@@ -5,6 +5,7 @@ typedef struct {
     PyObject_HEAD
     double data;
     double grad;
+    const char* _op;
 } ValueObject;
 
 static PyObject* Value_new(PyTypeObject *type, PyObject *args, PyObject *kwds) {
@@ -13,6 +14,7 @@ static PyObject* Value_new(PyTypeObject *type, PyObject *args, PyObject *kwds) {
     if (self != NULL) {
         self->data = 0.0;
         self->grad = 0.0;
+        self->_op = NULL;
     }
     return (PyObject *)self;
 }
@@ -22,9 +24,13 @@ static void Value_dealloc(ValueObject* self) {
 }
 
 static int Value_init(ValueObject *self, PyObject *args, PyObject *kwds) {
-    if (!PyArg_ParseTuple(args, "d", &self->data))
+    static char *kwlist[] = {"data", "_op", NULL};
+    const char* _op = "";
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "d|s", kwlist, &self->data, &_op))
         return -1;
     self->grad = 0.0;
+    self->_op = _op;
     return 0;
 }
 
@@ -34,6 +40,15 @@ static PyObject* Value_getdata(ValueObject* self, void* closure) {
 
 static PyObject* Value_getgrad(ValueObject* self, void* closure) {
     return PyFloat_FromDouble(self->grad);
+}
+
+static PyObject* Value_get_op(ValueObject* self, void* closure) {
+    // PySys_WriteStdout("%s\n", self->_op);
+    if (self->_op) {
+        return PyUnicode_FromString(self->_op);
+    } else {
+        Py_RETURN_NONE;
+    }
 }
 
 static int Value_setdata(ValueObject* self, PyObject* data, void* closure) {
@@ -74,6 +89,7 @@ static int Value_setgrad(ValueObject* self, PyObject* grad, void* closure) {
 static PyGetSetDef Value_getseters[] = {
     {"data", (getter)Value_getdata, (setter)Value_setdata, "Value's data", NULL},
     {"grad", (getter)Value_getgrad, (setter)Value_setgrad, "Value's grad", NULL},
+    {"_op", (getter)Value_get_op, (setter)NULL, "Value's source operation", NULL},
     {NULL}  /* Sentinel */
 };
 

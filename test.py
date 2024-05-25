@@ -3,11 +3,14 @@ from engine import Value
 def show(v):
     assert type(v.data) == float
     assert type(v.grad) == float
+    assert callable(v._backward)
+    assert v._backward() == None
     assert type(v._prev) == set
     assert type(v._op) == str
     print("-" * 40)
     print(f"{v.data=}", f"{type(v.data)=}")
     print(f"{v.grad=}", f"{type(v.grad)=}")
+    print(v._backward, v._backward())
     print(f"{v._prev=}", f"{type(v._prev)=}")
     print(f"{v._op=}", f"{type(v._op)=}")
 

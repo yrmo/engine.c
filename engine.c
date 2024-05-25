@@ -5,6 +5,7 @@ typedef struct {
     PyObject_HEAD
     double data;
     double grad;
+    PyObject* _backward;
     PyObject* _prev;
     const char* _op;
 } ValueObject;
@@ -26,9 +27,21 @@ static PyObject* Value_new(PyTypeObject *type, PyObject *args, PyObject *kwds) {
 }
 
 static void Value_dealloc(ValueObject* self) {
+    Py_XDECREF(self->_backward);
     Py_XDECREF(self->_prev);
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
+
+static PyObject* _backward_init(PyObject *self, PyObject *args) {
+    Py_RETURN_NONE;
+}
+
+static PyMethodDef _backward_def = {
+    "_backward_init",
+    (PyCFunction)_backward_init,
+    METH_VARARGS,
+    "Gradient backpropagation method"
+};
 
 static int Value_init(ValueObject *self, PyObject *args, PyObject *kwds) {
     static char *kwlist[] = {"data", "_op", "_children", NULL};
@@ -38,6 +51,11 @@ static int Value_init(ValueObject *self, PyObject *args, PyObject *kwds) {
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "d|sO", kwlist, &self->data, &_op, &_children))
         return -1;
     self->grad = 0.0;
+
+    self->_backward = PyCMethod_New(&_backward_def, (PyObject *)self, NULL, NULL);
+    if (self->_backward == NULL) {
+        return -1;
+    }
 
     if (_children) {
         if (!PyIter_Check(_children) && !PySequence_Check(_children)) {
@@ -120,9 +138,16 @@ static int Value_setgrad(ValueObject* self, PyObject* grad, void* closure) {
     return 0;
 }
 
+static PyObject* Value_get_backward(ValueObject *self, void *closure) {
+    Py_INCREF(self->_backward);
+    return self->_backward;
+}
+
 static PyGetSetDef Value_getseters[] = {
     {"data", (getter)Value_getdata, (setter)Value_setdata, "Value's data", NULL},
     {"grad", (getter)Value_getgrad, (setter)Value_setgrad, "Value's grad", NULL},
+    // TODO(yrmo): setter
+    {"_backward", (getter)Value_get_backward, (setter)NULL, "Value's backpropagation method", NULL},
     {"_prev", (getter)Value_get_prev, (setter)NULL, "Value's children", NULL},
     {"_op", (getter)Value_get_op, (setter)NULL, "Value's source operation", NULL},
     {NULL}  /* Sentinel */

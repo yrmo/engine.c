@@ -10,6 +10,9 @@ typedef struct {
     const char* _op;
 } ValueObject;
 
+static PyObject* _value(double data, PyObject* children, const char* op);
+static PyObject* Value_add(PyObject* self, PyObject* other);
+
 static PyObject* Value_new(PyTypeObject *type, PyObject *args, PyObject *kwds) {
     ValueObject *self;
     self = (ValueObject *)type->tp_alloc(type, 0);
@@ -153,6 +156,10 @@ static PyGetSetDef Value_getseters[] = {
     {NULL}  /* Sentinel */
 };
 
+static PyNumberMethods Value_as_number = {
+    .nb_add = (binaryfunc)Value_add,
+};
+
 static PyTypeObject ValueType = {
     PyVarObject_HEAD_INIT(NULL, 0)
     .tp_name = "engine.Value",
@@ -160,11 +167,37 @@ static PyTypeObject ValueType = {
     .tp_basicsize = sizeof(ValueObject),
     .tp_itemsize = 0,
     .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
+    .tp_as_number = &Value_as_number,
     .tp_new = Value_new,
     .tp_init = (initproc)Value_init,
     .tp_dealloc = (destructor)Value_dealloc,
     .tp_getset = Value_getseters,
 };
+
+
+static PyObject* _value(double data, PyObject* children, const char* op) {
+    PyObject* args = Py_BuildValue("(d)", data);
+    PyObject* kwargs = Py_BuildValue("{s:s,s:O}", "_op", op, "_children", children);
+    PyObject* value = PyObject_Call((PyObject*)&ValueType, args, kwargs);
+    Py_DECREF(args);
+    Py_DECREF(kwargs);
+    return value;
+}
+
+static PyObject* Value_add(PyObject* self, PyObject* other) {
+    if (PyObject_TypeCheck(other, &ValueType)) {
+        double result = ((ValueObject*)self)->data + ((ValueObject*)other)->data;
+        PyObject* children = PyTuple_Pack(2, self, other);
+        if (children == NULL) {
+            return NULL;
+        }
+        PyObject* out = _value(result, children, "+"); 
+        Py_DECREF(children);
+        return out;
+    } else {
+        Py_RETURN_NOTIMPLEMENTED;
+    }
+}
 
 static PyModuleDef engine = {
     PyModuleDef_HEAD_INIT,

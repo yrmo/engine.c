@@ -89,7 +89,7 @@ static int Value_setdata(ValueObject* self, PyObject* data, void* closure) {
     } else if (PyLong_Check(data)) {
         self->data = (double)PyLong_AsLong(data);
     } else {
-        PyErr_SetString(PyExc_TypeError, "The value attribute data must be a float or an int");
+        PyErr_SetString(PyExc_TypeError, "The data attribute data must be a float or an int");
         return -1;
     }
     return 0;
@@ -130,7 +130,7 @@ static PyGetSetDef Value_getseters[] = {
 
 static PyTypeObject ValueType = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    .tp_name = "value.Value",
+    .tp_name = "engine.Value",
     .tp_doc = "Stores a floating point number and its gradient",
     .tp_basicsize = sizeof(ValueObject),
     .tp_itemsize = 0,
@@ -141,19 +141,19 @@ static PyTypeObject ValueType = {
     .tp_getset = Value_getseters,
 };
 
-static PyModuleDef value = {
+static PyModuleDef engine = {
     PyModuleDef_HEAD_INIT,
-    .m_name = "value",
-    .m_doc = "Value module",
+    .m_name = "engine",
+    .m_doc = "Engine module",
     .m_size = -1,
 };
 
-PyMODINIT_FUNC PyInit_value(void) {
+PyMODINIT_FUNC PyInit_engine(void) {
     PyObject *m;
     if (PyType_Ready(&ValueType) < 0)
         return NULL;
 
-    m = PyModule_Create(&value);
+    m = PyModule_Create(&engine);
     if (m == NULL)
         return NULL;
 

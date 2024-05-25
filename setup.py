@@ -10,8 +10,8 @@ for so in Path('.').glob('value.cpython*'):
     Path(so).unlink()
 
 setup(
-    name='value',
+    name='engine',
     version='1.0',
     description='Python C extension `Value` container',
-    ext_modules=[Extension('value', sources=['value.c'])],
+    ext_modules=[Extension('engine', sources=['engine.c'])],
 )

@@ -5,6 +5,7 @@ typedef struct {
     PyObject_HEAD
     double data;
     double grad;
+    PyObject* _prev;
     const char* _op;
 } ValueObject;
 
@@ -14,12 +15,18 @@ static PyObject* Value_new(PyTypeObject *type, PyObject *args, PyObject *kwds) {
     if (self != NULL) {
         self->data = 0.0;
         self->grad = 0.0;
+        self->_prev = PySet_New(NULL);
+        if (self->_prev == NULL) {
+            Py_DECREF(self);
+            return NULL;
+        }
         self->_op = NULL;
     }
     return (PyObject *)self;
 }
 
 static void Value_dealloc(ValueObject* self) {
+    Py_XDECREF(self->_prev);
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
@@ -68,6 +75,14 @@ static int Value_setdata(ValueObject* self, PyObject* data, void* closure) {
     return 0;
 }
 
+static PyObject* Value_get_prev(ValueObject* self, void* closure) {
+    if (self->_prev) {
+        Py_INCREF(self->_prev);
+        return self->_prev;
+    } else {
+        Py_RETURN_NONE;
+    }
+}
 
 static int Value_setgrad(ValueObject* self, PyObject* grad, void* closure) {
     if (grad == NULL) {
@@ -89,6 +104,7 @@ static int Value_setgrad(ValueObject* self, PyObject* grad, void* closure) {
 static PyGetSetDef Value_getseters[] = {
     {"data", (getter)Value_getdata, (setter)Value_setdata, "Value's data", NULL},
     {"grad", (getter)Value_getgrad, (setter)Value_setgrad, "Value's grad", NULL},
+    {"_prev", (getter)Value_get_prev, (setter)NULL, "Value's children", NULL},
     {"_op", (getter)Value_get_op, (setter)NULL, "Value's source operation", NULL},
     {NULL}  /* Sentinel */
 };

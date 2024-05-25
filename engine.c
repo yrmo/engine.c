@@ -32,13 +32,13 @@ static void Value_dealloc(ValueObject* self) {
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
-static PyObject* _backward_init(PyObject *self, PyObject *args) {
+static PyObject* _backward(PyObject *self, PyObject *args) {
     Py_RETURN_NONE;
 }
 
 static PyMethodDef _backward_def = {
-    "_backward_init",
-    (PyCFunction)_backward_init,
+    "_backward",
+    (PyCFunction)_backward,
     METH_VARARGS,
     "Gradient backpropagation method"
 };

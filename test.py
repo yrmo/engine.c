@@ -29,3 +29,9 @@ assert v.data == 100.0
 assert v.grad == 42
 assert v.grad == 42.0
 show(v)
+
+a = Value(1)
+b = Value(2)
+c = Value(3, _children=(a, b))
+print(c._prev)
+assert c._prev == set([a, b])

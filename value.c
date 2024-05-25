@@ -31,12 +31,34 @@ static void Value_dealloc(ValueObject* self) {
 }
 
 static int Value_init(ValueObject *self, PyObject *args, PyObject *kwds) {
-    static char *kwlist[] = {"data", "_op", NULL};
+    static char *kwlist[] = {"data", "_op", "_children", NULL};
     const char* _op = "";
+    PyObject* _children = NULL;
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "d|s", kwlist, &self->data, &_op))
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "d|sO", kwlist, &self->data, &_op, &_children))
         return -1;
     self->grad = 0.0;
+
+    if (_children) {
+        if (!PyIter_Check(_children) && !PySequence_Check(_children)) {
+            PyErr_SetString(PyExc_TypeError, "The _children attribute must be an iterable");
+            return -1;
+        }
+        PyObject* iterator = PyObject_GetIter(_children);
+        if (iterator == NULL) {
+            return -1;
+        }
+        PyObject* item;
+        while ((item = PyIter_Next(iterator))) {
+            if (PySet_Add(self->_prev, item) == -1) {
+                Py_DECREF(item);
+                Py_DECREF(iterator);
+                return -1;
+            }
+            Py_DECREF(item);
+        }
+        Py_DECREF(iterator);
+    }
     self->_op = _op;
     return 0;
 }
@@ -50,7 +72,6 @@ static PyObject* Value_getgrad(ValueObject* self, void* closure) {
 }
 
 static PyObject* Value_get_op(ValueObject* self, void* closure) {
-    // PySys_WriteStdout("%s\n", self->_op);
     if (self->_op) {
         return PyUnicode_FromString(self->_op);
     } else {
@@ -71,7 +92,6 @@ static int Value_setdata(ValueObject* self, PyObject* data, void* closure) {
         PyErr_SetString(PyExc_TypeError, "The value attribute data must be a float or an int");
         return -1;
     }
-    self->data = PyFloat_AsDouble(data);
     return 0;
 }
 
@@ -97,7 +117,6 @@ static int Value_setgrad(ValueObject* self, PyObject* grad, void* closure) {
         PyErr_SetString(PyExc_TypeError, "The value attribute grad must be a float or an int");
         return -1;
     }
-    self->grad = PyFloat_AsDouble(grad);
     return 0;
 }
 
@@ -112,7 +131,7 @@ static PyGetSetDef Value_getseters[] = {
 static PyTypeObject ValueType = {
     PyVarObject_HEAD_INIT(NULL, 0)
     .tp_name = "value.Value",
-    .tp_doc = "Stores a floating point number and it's gradient",
+    .tp_doc = "Stores a floating point number and its gradient",
     .tp_basicsize = sizeof(ValueObject),
     .tp_itemsize = 0,
     .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,

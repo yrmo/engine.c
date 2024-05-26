@@ -46,3 +46,12 @@ assert e.data == 3
 assert e._prev == set([a, b])
 assert e._op == "+"
 show(e)
+
+f = a + 1
+assert f.data == 2
+f = a + 1.0
+assert f.data == 2
+g = 1 + a
+assert g.data == 2
+g = 1.0 + a
+assert g.data == 2

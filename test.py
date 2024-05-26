@@ -66,6 +66,15 @@ def test_backward_add():
 
 test_backward_add()
 
+def test_backward_radd():
+    a = 1
+    b = Value(1)
+    c = a + b
+    c.backward()
+    assert b.grad == 1
+
+test_backward_add()
+
 def test_backward_add_twice():
     a = Value(1.0)
     c = a + a
@@ -84,6 +93,15 @@ def test_backward_sub():
 
 test_backward_sub()
 
+def test_backward_rsub():
+    a = 1.0
+    b = Value(2)
+    c = a - b
+    c.backward()
+    assert b.grad == -1
+
+test_backward_rsub()
+
 def test_backward_mul():
     a = Value(1)
     b = Value(2.0)
@@ -94,6 +112,15 @@ def test_backward_mul():
 
 test_backward_mul()
 
+def test_backward_rmul():
+    a = 2.0
+    b = Value(1.0)
+    c = a * b
+    c.backward()
+    assert b.grad == 2.0
+
+test_backward_rmul()
+
 def test_backward_div():
     a = Value(1)
     b = Value(2.0)
@@ -103,3 +130,12 @@ def test_backward_div():
     assert b.grad == -0.25
 
 test_backward_div()
+
+def test_backward_rdiv():
+    a = 1
+    b = Value(2.0)
+    c = a / b
+    c.backward()
+    assert b.grad == -0.25
+
+test_backward_rdiv()

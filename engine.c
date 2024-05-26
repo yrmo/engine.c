@@ -2,19 +2,25 @@
 #include <Python.h>
 
 typedef struct ValueObject ValueObject;
-typedef void (*backward_function)(ValueObject*, ValueObject*, ValueObject*);
+typedef void (*backward_binary_function)(ValueObject*, ValueObject*, ValueObject*);
+typedef void (*backward_unary_function)(ValueObject*);
 
 typedef struct {
-    backward_function func;
+    backward_binary_function func;
     ValueObject* self;
     ValueObject* other;
-} BackwardClosure;
+} BackwardBinaryClosure;
+
+typedef struct {
+    backward_unary_function func;
+    ValueObject* self;
+} BackwardUnaryClosure;
 
 struct ValueObject {
     PyObject_HEAD
     double data;
     double grad;
-    BackwardClosure* _backward;
+    void* _backward;
     PyObject* _prev;
     const char* _op;
 };
@@ -52,8 +58,17 @@ void backward_pow(ValueObject* self, ValueObject* other, ValueObject* out) {
     other->grad += pow(self->data, other->data) * log(self->data) * out->grad;
 }
 
-BackwardClosure* closure(backward_function func, ValueObject* self, ValueObject* other) {
-    BackwardClosure* closure = (BackwardClosure*)malloc(sizeof(BackwardClosure));
+void backward_neg(ValueObject* self, ValueObject* other, ValueObject* out) {
+    self->grad += -out->grad;
+    // other is internal so ignore
+}
+
+void backward_relu(ValueObject* self) {
+    self->grad += (self->data > 0) ? 1.0 : 0;
+}
+
+BackwardBinaryClosure* closure(backward_binary_function func, ValueObject* self, ValueObject* other) {
+    BackwardBinaryClosure* closure = (BackwardBinaryClosure*)malloc(sizeof(BackwardBinaryClosure));
     closure->func = func;
     Py_INCREF(self);
     closure->self = self;
@@ -62,16 +77,29 @@ BackwardClosure* closure(backward_function func, ValueObject* self, ValueObject*
     return closure;
 }
 
-void free_closure(BackwardClosure* closure) {
+BackwardUnaryClosure* unary_closure(backward_unary_function func, ValueObject* self) {
+    BackwardUnaryClosure* closure = (BackwardUnaryClosure*)malloc(sizeof(BackwardUnaryClosure));
+    closure->func = func;
+    Py_INCREF(self);
+    closure->self = self;
+    return closure;
+}
+
+void free_binary_closure(BackwardBinaryClosure* closure) {
     Py_DECREF(closure->self);
     Py_DECREF(closure->other);
+    free(closure);
+}
+
+void free_unary_closure(BackwardUnaryClosure* closure) {
+    Py_DECREF(closure->self);
     free(closure);
 }
 
 static PyObject* _value(double data, PyObject* children, const char* op);
 typedef double (*binary_op_func)(double, double);
 
-static PyObject* Value_binary_op(PyObject* self, PyObject* other, binary_op_func op, const char* op_name, backward_function backward_func) {
+static PyObject* Value_binary_op(PyObject* self, PyObject* other, binary_op_func op, const char* op_name, backward_binary_function backward_func) {
     PyObject* value_self = NULL;
     PyObject* value_other = NULL;
 
@@ -150,7 +178,21 @@ static PyObject* Value_neg(PyObject* self) {
     if (other == NULL) {
         return NULL;
     }
-    return Value_binary_op(self, other, mul_op, "*", backward_div);
+    PyObject* result = Value_binary_op(self, other, mul_op, "*", backward_neg);
+    Py_DECREF(other);
+    return result;
+}
+
+static PyObject* Value_relu(PyObject* self) {
+    double data = ((ValueObject*)self)->data;
+    double relu_data = (data < 0) ? 0 : data;
+    PyObject* out = _value(relu_data, PyTuple_Pack(1, self), "ReLU");
+    if (out == NULL) {
+        return NULL;
+    }
+
+    ((ValueObject*)out)->_backward = unary_closure(backward_relu, (ValueObject*)self);
+    return out;
 }
 
 static PyObject* Value_new(PyTypeObject *type, PyObject *args, PyObject *kwds) {
@@ -171,7 +213,11 @@ static PyObject* Value_new(PyTypeObject *type, PyObject *args, PyObject *kwds) {
 
 static void Value_dealloc(ValueObject* self) {
     if (self->_backward) {
-        free_closure(self->_backward);
+        if (self->_op && strcmp(self->_op, "ReLU") == 0) {
+            free_unary_closure((BackwardUnaryClosure*)self->_backward);
+        } else {
+            free_binary_closure((BackwardBinaryClosure*)self->_backward);
+        }
     }
     Py_XDECREF(self->_prev);
     Py_TYPE(self)->tp_free((PyObject*)self);
@@ -270,8 +316,12 @@ static int Value_setgrad(ValueObject* self, PyObject* grad, void* closure) {
 
 static PyObject* Value_get_backward(ValueObject *self, void *closure) {
     if (self->_backward) {
-        Py_INCREF(self->_backward->self);
-        Py_INCREF(self->_backward->other);
+        if (self->_op && strcmp(self->_op, "ReLU") == 0) {
+            Py_INCREF(((BackwardUnaryClosure*)self->_backward)->self);
+        } else {
+            Py_INCREF(((BackwardBinaryClosure*)self->_backward)->self);
+            Py_INCREF(((BackwardBinaryClosure*)self->_backward)->other);
+        }
         return (PyObject*)self->_backward;
     }
     Py_RETURN_NONE;
@@ -334,8 +384,12 @@ static PyObject* Value_backward(ValueObject* self, PyObject* args) {
     Py_ssize_t i, n = PyList_Size(topo);
     for (i = 0; i < n; ++i) {
         ValueObject* v = (ValueObject*)PyList_GetItem(topo, i);
-        if (v->_backward && v->_backward->func) {
-            v->_backward->func(v->_backward->self, v->_backward->other, v);
+        if (v->_backward) {
+            if (v->_op && strcmp(v->_op, "ReLU") == 0) {
+                ((BackwardUnaryClosure*)v->_backward)->func(((BackwardUnaryClosure*)v->_backward)->self);
+            } else {
+                ((BackwardBinaryClosure*)v->_backward)->func(((BackwardBinaryClosure*)v->_backward)->self, ((BackwardBinaryClosure*)v->_backward)->other, v);
+            }
         }
     }
 
@@ -346,6 +400,7 @@ static PyObject* Value_backward(ValueObject* self, PyObject* args) {
 
 static PyMethodDef Value_methods[] = {
     {"backward", (PyCFunction)Value_backward, METH_NOARGS, "Backpropagate gradients"},
+    {"relu", (PyCFunction)Value_relu, METH_NOARGS, "ReLU activation"},
     {NULL}  /* Sentinel */
 };
 

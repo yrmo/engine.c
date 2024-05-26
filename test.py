@@ -165,3 +165,11 @@ def test_backward_pow():
     assert a.grad == 4.0
 
 test_backward_pow()
+
+def test_backward_relu():
+    a = Value(2.0)
+    b = a.relu()
+    b.backward()
+    assert a.grad == 1.0
+
+test_backward_relu()

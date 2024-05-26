@@ -66,6 +66,16 @@ def test_backward_add():
 
 test_backward_add()
 
+def test_backward_add_neg():
+    a = Value(1)
+    b = Value(-1)
+    c = a + b
+    c.backward()
+    assert a.grad == 1
+    assert b.grad == 1
+
+test_backward_add_neg()
+
 def test_backward_radd():
     a = 1
     b = Value(1)
@@ -139,3 +149,11 @@ def test_backward_rdiv():
     assert b.grad == -0.25
 
 test_backward_rdiv()
+
+def test_backward_neg():
+    a = Value(2.0)
+    b = -a
+    b.backward()
+    assert a.grad == -1.0
+
+test_backward_neg()

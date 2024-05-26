@@ -131,6 +131,14 @@ static PyObject* Value_div(PyObject* self, PyObject* other) {
     return Value_binary_op(self, other, div_op, "/", backward_div);
 }
 
+static PyObject* Value_neg(PyObject* self) {
+    PyObject* other = _value(-1.0, PyTuple_New(0), "");
+    if (other == NULL) {
+        return NULL;
+    }
+    return Value_binary_op(self, other, mul_op, "*", backward_div);
+}
+
 static PyObject* Value_new(PyTypeObject *type, PyObject *args, PyObject *kwds) {
     ValueObject *self;
     self = (ValueObject *)type->tp_alloc(type, 0);
@@ -269,6 +277,7 @@ static PyNumberMethods Value_as_number = {
     .nb_subtract = (binaryfunc)Value_sub,
     .nb_multiply = (binaryfunc)Value_mul,
     .nb_true_divide = (binaryfunc)Value_div,
+    .nb_negative = (unaryfunc)Value_neg,
 };
 
 void build_topo(ValueObject* value, PyObject* visited, PyObject* topo) {

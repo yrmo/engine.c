@@ -1,14 +1,44 @@
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 
+typedef struct ValueObject ValueObject;
+typedef void (*backward_function)(ValueObject*, ValueObject*, ValueObject*);
+
 typedef struct {
+    backward_function func;
+    ValueObject* self;
+    ValueObject* other;
+} BackwardClosure;
+
+struct ValueObject {
     PyObject_HEAD
     double data;
     double grad;
-    PyObject* _backward;
+    BackwardClosure* _backward;
     PyObject* _prev;
     const char* _op;
-} ValueObject;
+};
+
+void backward_add(ValueObject* self, ValueObject* other, ValueObject* out) {
+    self->grad += out->grad;
+    other->grad += out->grad;
+}
+
+BackwardClosure* closure(backward_function func, ValueObject* self, ValueObject* other) {
+    BackwardClosure* closure = (BackwardClosure*)malloc(sizeof(BackwardClosure));
+    closure->func = func;
+    Py_INCREF(self);
+    closure->self = self;
+    Py_INCREF(other);
+    closure->other = other;
+    return closure;
+}
+
+void free_closure(BackwardClosure* closure) {
+    Py_DECREF(closure->self);
+    Py_DECREF(closure->other);
+    free(closure);
+}
 
 static PyObject* _value(double data, PyObject* children, const char* op);
 static PyObject* Value_add(PyObject* self, PyObject* other);
@@ -30,21 +60,14 @@ static PyObject* Value_new(PyTypeObject *type, PyObject *args, PyObject *kwds) {
 }
 
 static void Value_dealloc(ValueObject* self) {
-    Py_XDECREF(self->_backward);
+    if (self->_backward) {
+        Py_XDECREF(self->_backward->self);
+        Py_XDECREF(self->_backward->other);
+        free_closure(self->_backward);
+    }
     Py_XDECREF(self->_prev);
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
-
-static PyObject* _backward(PyObject *self, PyObject *args) {
-    Py_RETURN_NONE;
-}
-
-static PyMethodDef _backward_def = {
-    "_backward",
-    (PyCFunction)_backward,
-    METH_VARARGS,
-    "Gradient backpropagation method"
-};
 
 static int Value_init(ValueObject *self, PyObject *args, PyObject *kwds) {
     static char *kwlist[] = {"data", "_op", "_children", NULL};
@@ -54,11 +77,7 @@ static int Value_init(ValueObject *self, PyObject *args, PyObject *kwds) {
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "d|sO", kwlist, &self->data, &_op, &_children))
         return -1;
     self->grad = 0.0;
-
-    self->_backward = PyCMethod_New(&_backward_def, (PyObject *)self, NULL, NULL);
-    if (self->_backward == NULL) {
-        return -1;
-    }
+    self->_backward = NULL;
 
     if (_children) {
         if (!PyIter_Check(_children) && !PySequence_Check(_children)) {
@@ -142,14 +161,17 @@ static int Value_setgrad(ValueObject* self, PyObject* grad, void* closure) {
 }
 
 static PyObject* Value_get_backward(ValueObject *self, void *closure) {
-    Py_INCREF(self->_backward);
-    return self->_backward;
+    if (self->_backward) {
+        Py_INCREF(self->_backward->self);
+        Py_INCREF(self->_backward->other);
+        return (PyObject*)self->_backward;
+    }
+    Py_RETURN_NONE;
 }
 
 static PyGetSetDef Value_getseters[] = {
     {"data", (getter)Value_getdata, (setter)Value_setdata, "Value's data", NULL},
     {"grad", (getter)Value_getgrad, (setter)Value_setgrad, "Value's grad", NULL},
-    // TODO(yrmo): setter
     {"_backward", (getter)Value_get_backward, (setter)NULL, "Value's backpropagation method", NULL},
     {"_prev", (getter)Value_get_prev, (setter)NULL, "Value's children", NULL},
     {"_op", (getter)Value_get_op, (setter)NULL, "Value's source operation", NULL},
@@ -158,6 +180,60 @@ static PyGetSetDef Value_getseters[] = {
 
 static PyNumberMethods Value_as_number = {
     .nb_add = (binaryfunc)Value_add,
+};
+
+void build_topo(ValueObject* value, PyObject* visited, PyObject* topo) {
+    if (PySet_Contains(visited, (PyObject*)value)) {
+        return;
+    }
+    PySet_Add(visited, (PyObject*)value);
+
+    PyObject* iterator = PyObject_GetIter(value->_prev);
+    if (iterator == NULL) {
+        return;
+    }
+    PyObject* item;
+    while ((item = PyIter_Next(iterator))) {
+        build_topo((ValueObject*)item, visited, topo);
+        Py_DECREF(item);
+    }
+    Py_DECREF(iterator);
+
+    PyList_Append(topo, (PyObject*)value);
+}
+
+static PyObject* Value_backward(ValueObject* self, PyObject* args) {
+    self->grad = 1.0;
+
+    PyObject* visited = PySet_New(NULL);
+    PyObject* topo = PyList_New(0);
+
+    if (visited == NULL || topo == NULL) {
+        Py_XDECREF(visited);
+        Py_XDECREF(topo);
+        return NULL;
+    }
+
+    build_topo(self, visited, topo);
+
+    PyList_Reverse(topo);
+
+    Py_ssize_t i, n = PyList_Size(topo);
+    for (i = 0; i < n; ++i) {
+        ValueObject* v = (ValueObject*)PyList_GetItem(topo, i);
+        if (v->_backward && v->_backward->func) {
+            v->_backward->func(v->_backward->self, v->_backward->other, v);
+        }
+    }
+
+    Py_DECREF(visited);
+    Py_DECREF(topo);
+    Py_RETURN_NONE;
+}
+
+static PyMethodDef Value_methods[] = {
+    {"backward", (PyCFunction)Value_backward, METH_NOARGS, "Backpropagate gradients"},
+    {NULL}  /* Sentinel */
 };
 
 static PyTypeObject ValueType = {
@@ -172,8 +248,8 @@ static PyTypeObject ValueType = {
     .tp_init = (initproc)Value_init,
     .tp_dealloc = (destructor)Value_dealloc,
     .tp_getset = Value_getseters,
+    .tp_methods = Value_methods,
 };
-
 
 static PyObject* _value(double data, PyObject* children, const char* op) {
     PyObject* args = Py_BuildValue("(d)", data);
@@ -183,6 +259,7 @@ static PyObject* _value(double data, PyObject* children, const char* op) {
     Py_DECREF(kwargs);
     return value;
 }
+
 static PyObject* Value_add(PyObject* self, PyObject* other) {
     PyObject* value_self = NULL;
     PyObject* value_other = NULL;
@@ -222,11 +299,16 @@ static PyObject* Value_add(PyObject* self, PyObject* other) {
     }
     PyObject* out = _value(result, children, "+");
     Py_DECREF(children);
+    if (out == NULL) {
+        Py_DECREF(value_self);
+        Py_DECREF(value_other);
+        return NULL;
+    }
+    ((ValueObject*)out)->_backward = closure(backward_add, (ValueObject*)value_self, (ValueObject*)value_other);
     Py_DECREF(value_self);
     Py_DECREF(value_other);
     return out;
 }
-
 
 static PyModuleDef engine = {
     PyModuleDef_HEAD_INIT,

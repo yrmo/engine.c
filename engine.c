@@ -183,73 +183,50 @@ static PyObject* _value(double data, PyObject* children, const char* op) {
     Py_DECREF(kwargs);
     return value;
 }
-
 static PyObject* Value_add(PyObject* self, PyObject* other) {
-    PyObject* empty_tuple = PyTuple_New(0);
-    if (empty_tuple == NULL) {
-        return NULL;
-    }
-
-    PyObject* value_other;
-    PyObject* value_self;
-
-    if (PyObject_TypeCheck(other, &ValueType)) {
-        value_other = other;
-        Py_INCREF(value_other);
-    } else if (PyFloat_Check(other)) {
-        value_other = _value(PyFloat_AsDouble(other), empty_tuple, "");
-        Py_DECREF(empty_tuple);
-        if (value_other == NULL) {
-            Py_DECREF(empty_tuple);
-            return NULL;
-        }
-    } else if (PyLong_Check(other)) {
-        value_other = _value(PyLong_AsDouble(other), empty_tuple, "");
-        Py_DECREF(empty_tuple);
-        if (value_other == NULL) {
-            Py_DECREF(empty_tuple);
-            return NULL;
-        }
-    } else {
-        Py_DECREF(empty_tuple);
-        Py_RETURN_NOTIMPLEMENTED;
-    }
+    PyObject* value_self = NULL;
+    PyObject* value_other = NULL;
 
     if (PyObject_TypeCheck(self, &ValueType)) {
         value_self = self;
         Py_INCREF(value_self);
-    } else if (PyFloat_Check(self)) {
-        value_self = _value(PyFloat_AsDouble(self), empty_tuple, "");
-        Py_DECREF(empty_tuple);
+    } else if (PyFloat_Check(self) || PyLong_Check(self)) {
+        value_self = _value(PyFloat_AsDouble(self), PyTuple_New(0), "");
         if (value_self == NULL) {
-            Py_DECREF(empty_tuple);
-            return NULL;
-        }
-    } else if (PyLong_Check(self)) {
-        value_self = _value(PyLong_AsDouble(self), empty_tuple, "");
-        Py_DECREF(empty_tuple);
-        if (value_self == NULL) {
-            Py_DECREF(empty_tuple);
             return NULL;
         }
     } else {
-        Py_DECREF(empty_tuple);
+        Py_RETURN_NOTIMPLEMENTED;
+    }
+
+    if (PyObject_TypeCheck(other, &ValueType)) {
+        value_other = other;
+        Py_INCREF(value_other);
+    } else if (PyFloat_Check(other) || PyLong_Check(other)) {
+        value_other = _value(PyFloat_AsDouble(other), PyTuple_New(0), "");
+        if (value_other == NULL) {
+            Py_DECREF(value_self);
+            return NULL;
+        }
+    } else {
+        Py_DECREF(value_self);
         Py_RETURN_NOTIMPLEMENTED;
     }
 
     double result = ((ValueObject*)value_self)->data + ((ValueObject*)value_other)->data;
-    PyObject* children = PyTuple_Pack(2, self, value_other);
+    PyObject* children = PyTuple_Pack(2, value_self, value_other);
     if (children == NULL) {
-        Py_DECREF(empty_tuple);
+        Py_DECREF(value_self);
         Py_DECREF(value_other);
         return NULL;
     }
     PyObject* out = _value(result, children, "+");
-    Py_DECREF(empty_tuple);
-    Py_DECREF(value_other);
     Py_DECREF(children);
+    Py_DECREF(value_self);
+    Py_DECREF(value_other);
     return out;
 }
+
 
 static PyModuleDef engine = {
     PyModuleDef_HEAD_INIT,

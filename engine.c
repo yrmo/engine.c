@@ -61,8 +61,6 @@ static PyObject* Value_new(PyTypeObject *type, PyObject *args, PyObject *kwds) {
 
 static void Value_dealloc(ValueObject* self) {
     if (self->_backward) {
-        Py_XDECREF(self->_backward->self);
-        Py_XDECREF(self->_backward->other);
         free_closure(self->_backward);
     }
     Py_XDECREF(self->_prev);

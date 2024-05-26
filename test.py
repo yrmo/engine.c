@@ -55,7 +55,7 @@ assert g.data == 2
 g = 1.0 + a
 assert g.data == 2
 
-def test_backward():
+def test_backward_add():
     a = Value(1)
     b = Value(1)
     c = a + b
@@ -63,10 +63,43 @@ def test_backward():
     assert a.grad == 1
     assert b.grad == 1
 
-def test_backward():
-    a = Value(1)
+
+test_backward_add()
+
+def test_backward_add_twice():
+    a = Value(1.0)
     c = a + a
     c.backward()
     assert a.grad == 2
 
-test_backward()
+test_backward_add_twice()
+
+def test_backward_sub():
+    a = Value(1.0)
+    b = Value(2)
+    c = a - b
+    c.backward()
+    assert a.grad == 1
+    assert b.grad == -1
+
+test_backward_sub()
+
+def test_backward_mul():
+    a = Value(1)
+    b = Value(2.0)
+    c = a * b
+    c.backward()
+    assert a.grad == 2
+    assert b.grad == 1
+
+test_backward_mul()
+
+def test_backward_div():
+    a = Value(1)
+    b = Value(2.0)
+    c = a / b
+    c.backward()
+    assert a.grad == 0.5
+    assert b.grad == -0.25
+
+test_backward_div()

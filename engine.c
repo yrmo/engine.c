@@ -19,9 +19,31 @@ struct ValueObject {
     const char* _op;
 };
 
+static PyTypeObject ValueType;
+
+double add_op(double a, double b) { return a + b; }
+double sub_op(double a, double b) { return a - b; }
+double mul_op(double a, double b) { return a * b; }
+double div_op(double a, double b) { return a / b; }
+
 void backward_add(ValueObject* self, ValueObject* other, ValueObject* out) {
     self->grad += out->grad;
     other->grad += out->grad;
+}
+
+void backward_sub(ValueObject* self, ValueObject* other, ValueObject* out) {
+    self->grad += out->grad;
+    other->grad -= out->grad;
+}
+
+void backward_mul(ValueObject* self, ValueObject* other, ValueObject* out) {
+    self->grad += other->data * out->grad;
+    other->grad += self->data * out->grad;
+}
+
+void backward_div(ValueObject* self, ValueObject* other, ValueObject* out) {
+    self->grad += out->grad / other->data;
+    other->grad -= (self->data * out->grad) / (other->data * other->data);
 }
 
 BackwardClosure* closure(backward_function func, ValueObject* self, ValueObject* other) {
@@ -41,7 +63,73 @@ void free_closure(BackwardClosure* closure) {
 }
 
 static PyObject* _value(double data, PyObject* children, const char* op);
-static PyObject* Value_add(PyObject* self, PyObject* other);
+typedef double (*binary_op_func)(double, double);
+
+static PyObject* Value_binary_op(PyObject* self, PyObject* other, binary_op_func op, const char* op_name, backward_function backward_func) {
+    PyObject* value_self = NULL;
+    PyObject* value_other = NULL;
+
+    if (PyObject_TypeCheck(self, &ValueType)) {
+        value_self = self;
+        Py_INCREF(value_self);
+    } else if (PyFloat_Check(self) || PyLong_Check(self)) {
+        value_self = _value(PyFloat_AsDouble(self), PyTuple_New(0), "");
+        if (value_self == NULL) {
+            return NULL;
+        }
+    } else {
+        Py_RETURN_NOTIMPLEMENTED;
+    }
+
+    if (PyObject_TypeCheck(other, &ValueType)) {
+        value_other = other;
+        Py_INCREF(value_other);
+    } else if (PyFloat_Check(other) || PyLong_Check(other)) {
+        value_other = _value(PyFloat_AsDouble(other), PyTuple_New(0), "");
+        if (value_other == NULL) {
+            Py_DECREF(value_self);
+            return NULL;
+        }
+    } else {
+        Py_DECREF(value_self);
+        Py_RETURN_NOTIMPLEMENTED;
+    }
+
+    double result = op(((ValueObject*)value_self)->data, ((ValueObject*)value_other)->data);
+    PyObject* children = PyTuple_Pack(2, value_self, value_other);
+    if (children == NULL) {
+        Py_DECREF(value_self);
+        Py_DECREF(value_other);
+        return NULL;
+    }
+    PyObject* out = _value(result, children, op_name);
+    Py_DECREF(children);
+    if (out == NULL) {
+        Py_DECREF(value_self);
+        Py_DECREF(value_other);
+        return NULL;
+    }
+    ((ValueObject*)out)->_backward = closure(backward_func, (ValueObject*)value_self, (ValueObject*)value_other);
+    Py_DECREF(value_self);
+    Py_DECREF(value_other);
+    return out;
+}
+
+static PyObject* Value_add(PyObject* self, PyObject* other) {
+    return Value_binary_op(self, other, add_op, "+", backward_add);
+}
+
+static PyObject* Value_sub(PyObject* self, PyObject* other) {
+    return Value_binary_op(self, other, sub_op, "-", backward_sub);
+}
+
+static PyObject* Value_mul(PyObject* self, PyObject* other) {
+    return Value_binary_op(self, other, mul_op, "*", backward_mul);
+}
+
+static PyObject* Value_div(PyObject* self, PyObject* other) {
+    return Value_binary_op(self, other, div_op, "/", backward_div);
+}
 
 static PyObject* Value_new(PyTypeObject *type, PyObject *args, PyObject *kwds) {
     ValueObject *self;
@@ -178,6 +266,9 @@ static PyGetSetDef Value_getseters[] = {
 
 static PyNumberMethods Value_as_number = {
     .nb_add = (binaryfunc)Value_add,
+    .nb_subtract = (binaryfunc)Value_sub,
+    .nb_multiply = (binaryfunc)Value_mul,
+    .nb_true_divide = (binaryfunc)Value_div,
 };
 
 void build_topo(ValueObject* value, PyObject* visited, PyObject* topo) {
@@ -256,56 +347,6 @@ static PyObject* _value(double data, PyObject* children, const char* op) {
     Py_DECREF(args);
     Py_DECREF(kwargs);
     return value;
-}
-
-static PyObject* Value_add(PyObject* self, PyObject* other) {
-    PyObject* value_self = NULL;
-    PyObject* value_other = NULL;
-
-    if (PyObject_TypeCheck(self, &ValueType)) {
-        value_self = self;
-        Py_INCREF(value_self);
-    } else if (PyFloat_Check(self) || PyLong_Check(self)) {
-        value_self = _value(PyFloat_AsDouble(self), PyTuple_New(0), "");
-        if (value_self == NULL) {
-            return NULL;
-        }
-    } else {
-        Py_RETURN_NOTIMPLEMENTED;
-    }
-
-    if (PyObject_TypeCheck(other, &ValueType)) {
-        value_other = other;
-        Py_INCREF(value_other);
-    } else if (PyFloat_Check(other) || PyLong_Check(other)) {
-        value_other = _value(PyFloat_AsDouble(other), PyTuple_New(0), "");
-        if (value_other == NULL) {
-            Py_DECREF(value_self);
-            return NULL;
-        }
-    } else {
-        Py_DECREF(value_self);
-        Py_RETURN_NOTIMPLEMENTED;
-    }
-
-    double result = ((ValueObject*)value_self)->data + ((ValueObject*)value_other)->data;
-    PyObject* children = PyTuple_Pack(2, value_self, value_other);
-    if (children == NULL) {
-        Py_DECREF(value_self);
-        Py_DECREF(value_other);
-        return NULL;
-    }
-    PyObject* out = _value(result, children, "+");
-    Py_DECREF(children);
-    if (out == NULL) {
-        Py_DECREF(value_self);
-        Py_DECREF(value_other);
-        return NULL;
-    }
-    ((ValueObject*)out)->_backward = closure(backward_add, (ValueObject*)value_self, (ValueObject*)value_other);
-    Py_DECREF(value_self);
-    Py_DECREF(value_other);
-    return out;
 }
 
 static PyModuleDef engine = {

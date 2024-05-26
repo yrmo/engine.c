@@ -25,6 +25,7 @@ double add_op(double a, double b) { return a + b; }
 double sub_op(double a, double b) { return a - b; }
 double mul_op(double a, double b) { return a * b; }
 double div_op(double a, double b) { return a / b; }
+double pow_op(double a, double b) { return pow(a, b); }
 
 void backward_add(ValueObject* self, ValueObject* other, ValueObject* out) {
     self->grad += out->grad;
@@ -44,6 +45,11 @@ void backward_mul(ValueObject* self, ValueObject* other, ValueObject* out) {
 void backward_div(ValueObject* self, ValueObject* other, ValueObject* out) {
     self->grad += out->grad / other->data;
     other->grad -= (self->data * out->grad) / (other->data * other->data);
+}
+
+void backward_pow(ValueObject* self, ValueObject* other, ValueObject* out) {
+    self->grad += other->data * pow(self->data, other->data - 1) * out->grad;
+    other->grad += pow(self->data, other->data) * log(self->data) * out->grad;
 }
 
 BackwardClosure* closure(backward_function func, ValueObject* self, ValueObject* other) {
@@ -129,6 +135,14 @@ static PyObject* Value_mul(PyObject* self, PyObject* other) {
 
 static PyObject* Value_div(PyObject* self, PyObject* other) {
     return Value_binary_op(self, other, div_op, "/", backward_div);
+}
+
+static PyObject* Value_pow(PyObject* self, PyObject* other, PyObject* mod) {
+    if (mod != Py_None) {
+        PyErr_SetString(PyExc_TypeError, "Mod not supported");
+        return NULL;
+    }
+    return Value_binary_op(self, other, pow_op, "**", backward_pow);
 }
 
 static PyObject* Value_neg(PyObject* self) {
@@ -278,6 +292,7 @@ static PyNumberMethods Value_as_number = {
     .nb_multiply = (binaryfunc)Value_mul,
     .nb_true_divide = (binaryfunc)Value_div,
     .nb_negative = (unaryfunc)Value_neg,
+    .nb_power = (ternaryfunc)Value_pow,
 };
 
 void build_topo(ValueObject* value, PyObject* visited, PyObject* topo) {

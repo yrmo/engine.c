@@ -157,3 +157,11 @@ def test_backward_neg():
     assert a.grad == -1.0
 
 test_backward_neg()
+
+def test_backward_pow():
+    a = Value(2.0)
+    b = a**2
+    b.backward()
+    assert a.grad == 4.0
+
+test_backward_pow()

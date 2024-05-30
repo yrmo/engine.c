@@ -3,6 +3,7 @@ Python C extension `Value` container
 
 ## Build & Test
 ```
+pip install -r requirements.txt
 python setup.py build_ext --inplace
-python test.py
+python -m pytest test.py
 ```

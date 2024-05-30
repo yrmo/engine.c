@@ -60,11 +60,11 @@ void backward_pow(ValueObject* self, ValueObject* other, ValueObject* out) {
     other->grad += pow(self->data, other->data) * log(self->data) * out->grad;
 }
 
-void backward_neg(ValueObject* self, ValueObject* out) {
+void backward_neg(ValueObject* self, ValueObject* other, ValueObject* out) {
     self->grad += -out->grad;
 }
 
-void backward_relu(ValueObject* self, ValueObject* out) {
+void backward_relu(ValueObject* self, ValueObject* other, ValueObject* out) {
     self->grad += ((self->data > 0) ? 1.0 : 0) * out->grad;
 }
 
@@ -207,7 +207,7 @@ static PyObject* Value_neg(PyObject* self) {
     if (dummy == NULL) {
         return NULL;
     }
-    PyObject* result = Value_binary_op(self, dummy, pow_op, "~", backward_pow);
+    PyObject* result = Value_binary_op(self, dummy, pow_op, "~", backward_neg);
     Py_DECREF(dummy);
     return result;
     // return Value_unary_op(self, neg_op, "~", backward_neg);
@@ -218,7 +218,7 @@ static PyObject* Value_relu(PyObject* self) {
     if (dummy == NULL) {
         return NULL;
     }
-    PyObject* result = Value_binary_op(self, dummy, pow_op, "R", backward_pow);
+    PyObject* result = Value_binary_op(self, dummy, pow_op, "R", backward_relu);
     Py_DECREF(dummy);
     return result;
     // return Value_unary_op(self, relu_op, "R", backward_relu);

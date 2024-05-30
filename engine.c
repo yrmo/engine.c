@@ -3,7 +3,7 @@
 
 typedef struct ValueObject ValueObject;
 typedef void (*backward_binary_function)(ValueObject*, ValueObject*, ValueObject*);
-typedef void (*backward_unary_function)(ValueObject*, ValueObject*);
+// typedef void (*backward_unary_function)(ValueObject*, ValueObject*);
 
 typedef struct {
     backward_binary_function func;
@@ -11,10 +11,10 @@ typedef struct {
     ValueObject* other;
 } BackwardBinaryClosure;
 
-typedef struct {
-    backward_unary_function func;
-    ValueObject* self;
-} BackwardUnaryClosure;
+// typedef struct {
+//     backward_unary_function func;
+//     ValueObject* self;
+// } BackwardUnaryClosure;
 
 struct ValueObject {
     PyObject_HEAD
@@ -78,13 +78,13 @@ BackwardBinaryClosure* binary_closure(backward_binary_function func, ValueObject
     return closure;
 }
 
-BackwardUnaryClosure* unary_closure(backward_unary_function func, ValueObject* self) {
-    BackwardUnaryClosure* closure = (BackwardUnaryClosure*)malloc(sizeof(BackwardUnaryClosure));
-    closure->func = func;
-    Py_INCREF(self);
-    closure->self = self;
-    return closure;
-}
+// BackwardUnaryClosure* unary_closure(backward_unary_function func, ValueObject* self) {
+//     BackwardUnaryClosure* closure = (BackwardUnaryClosure*)malloc(sizeof(BackwardUnaryClosure));
+//     closure->func = func;
+//     Py_INCREF(self);
+//     closure->self = self;
+//     return closure;
+// }
 
 void free_binary_closure(BackwardBinaryClosure* closure) {
     Py_DECREF(closure->self);
@@ -92,41 +92,41 @@ void free_binary_closure(BackwardBinaryClosure* closure) {
     free(closure);
 }
 
-void free_unary_closure(BackwardUnaryClosure* closure) {
-    Py_DECREF(closure->self);
-    free(closure);
-}
+// void free_unary_closure(BackwardUnaryClosure* closure) {
+//     Py_DECREF(closure->self);
+//     free(closure);
+// }
 
 static PyObject* _value(double data, PyObject* children, const char* op);
-typedef double (*unary_op_func)(double);
+// typedef double (*unary_op_func)(double);
 typedef double (*binary_op_func)(double, double);
 
-static PyObject* Value_unary_op(PyObject* self, unary_op_func op, const char* op_name, backward_unary_function backward_func) {
-    PyObject* value_self = NULL;
+// static PyObject* Value_unary_op(PyObject* self, unary_op_func op, const char* op_name, backward_unary_function backward_func) {
+//     PyObject* value_self = NULL;
 
-    if (!PyObject_TypeCheck(self, &ValueType)) {
-        Py_RETURN_NOTIMPLEMENTED;
-    }
+//     if (!PyObject_TypeCheck(self, &ValueType)) {
+//         Py_RETURN_NOTIMPLEMENTED;
+//     }
 
-    value_self = self;
-    Py_INCREF(value_self);
+//     value_self = self;
+//     Py_INCREF(value_self);
 
-    double result = op(((ValueObject*)value_self)->data);
-    PyObject* children = PyTuple_Pack(1, value_self);
-    if (children == NULL) {
-        Py_DECREF(value_self);
-        return NULL;
-    }
-    PyObject* out = _value(result, children, op_name);
-    Py_DECREF(children);
-    if (out == NULL) {
-        Py_DECREF(value_self);
-        return NULL;
-    }
-    ((ValueObject*)out)->_backward = unary_closure(backward_func, (ValueObject*)value_self);
-    Py_DECREF(value_self);
-    return out;
-}
+//     double result = op(((ValueObject*)value_self)->data);
+//     PyObject* children = PyTuple_Pack(1, value_self);
+//     if (children == NULL) {
+//         Py_DECREF(value_self);
+//         return NULL;
+//     }
+//     PyObject* out = _value(result, children, op_name);
+//     Py_DECREF(children);
+//     if (out == NULL) {
+//         Py_DECREF(value_self);
+//         return NULL;
+//     }
+//     ((ValueObject*)out)->_backward = unary_closure(backward_func, (ValueObject*)value_self);
+//     Py_DECREF(value_self);
+//     return out;
+// }
 
 static PyObject* Value_binary_op(PyObject* self, PyObject* other, binary_op_func op, const char* op_name, backward_binary_function backward_func) {
     PyObject* value_self = NULL;
@@ -203,16 +203,30 @@ static PyObject* Value_pow(PyObject* self, PyObject* other, PyObject* mod) {
 }
 
 static PyObject* Value_neg(PyObject* self) {
-    return Value_unary_op(self, neg_op, "~", backward_neg);
+    PyObject* dummy = _value(0.0, PyTuple_New(0), "");
+    if (dummy == NULL) {
+        return NULL;
+    }
+    PyObject* result = Value_binary_op(self, dummy, pow_op, "~", backward_pow);
+    Py_DECREF(dummy);
+    return result;
+    // return Value_unary_op(self, neg_op, "~", backward_neg);
 }
 
 static PyObject* Value_relu(PyObject* self) {
-    return Value_unary_op(self, relu_op, "R", backward_relu);
+    PyObject* dummy = _value(0.0, PyTuple_New(0), "");
+    if (dummy == NULL) {
+        return NULL;
+    }
+    PyObject* result = Value_binary_op(self, dummy, pow_op, "R", backward_pow);
+    Py_DECREF(dummy);
+    return result;
+    // return Value_unary_op(self, relu_op, "R", backward_relu);
 }
 
-int is_unary(const char* op) {
-    return (strcmp(op, "~") == 0 || strcmp(op, "R") == 0);
-}
+// int is_unary(const char* op) {
+//     return (strcmp(op, "~") == 0 || strcmp(op, "R") == 0);
+// }
 
 static PyObject* Value_new(PyTypeObject *type, PyObject *args, PyObject *kwds) {
     ValueObject *self;
@@ -232,11 +246,11 @@ static PyObject* Value_new(PyTypeObject *type, PyObject *args, PyObject *kwds) {
 
 static void Value_dealloc(ValueObject* self) {
     if (self->_backward) {
-        if (is_unary(self->_op)) {
-            free_unary_closure((BackwardUnaryClosure*)self->_backward);
-        } else {
-            free_binary_closure((BackwardBinaryClosure*)self->_backward);
-        }
+        // if (is_unary(self->_op)) {
+        //     free_unary_closure((BackwardUnaryClosure*)self->_backward);
+        // } else {
+        free_binary_closure((BackwardBinaryClosure*)self->_backward);
+        // }
     }
     Py_XDECREF(self->_prev);
     Py_TYPE(self)->tp_free((PyObject*)self);
@@ -335,12 +349,12 @@ static int Value_setgrad(ValueObject* self, PyObject* grad, void* closure) {
 
 static PyObject* Value_get_backward(ValueObject *self, void *closure) {
     if (self->_backward) {
-        if (is_unary(self->_op)) {
-            Py_INCREF(((BackwardUnaryClosure*)self->_backward)->self);
-        } else {
-            Py_INCREF(((BackwardBinaryClosure*)self->_backward)->self);
-            Py_INCREF(((BackwardBinaryClosure*)self->_backward)->other);
-        }
+        // if (is_unary(self->_op)) {
+        //     Py_INCREF(((BackwardUnaryClosure*)self->_backward)->self);
+        // } else {
+        Py_INCREF(((BackwardBinaryClosure*)self->_backward)->self);
+        Py_INCREF(((BackwardBinaryClosure*)self->_backward)->other);
+        // }
         return (PyObject*)self->_backward;
     }
     Py_RETURN_NONE;
@@ -404,11 +418,11 @@ static PyObject* Value_backward(ValueObject* self, PyObject* args) {
     for (i = 0; i < n; ++i) {
         ValueObject* v = (ValueObject*)PyList_GetItem(topo, i);
         if (v->_backward) {
-            if (is_unary(self->_op)) {
-                ((BackwardUnaryClosure*)v->_backward)->func(((BackwardUnaryClosure*)v->_backward)->self, v);
-            } else {
-                ((BackwardBinaryClosure*)v->_backward)->func(((BackwardBinaryClosure*)v->_backward)->self, ((BackwardBinaryClosure*)v->_backward)->other, v);
-            }
+            // if (is_unary(self->_op)) {
+                // ((BackwardUnaryClosure*)v->_backward)->func(((BackwardUnaryClosure*)v->_backward)->self, v);
+            // } else {
+            ((BackwardBinaryClosure*)v->_backward)->func(((BackwardBinaryClosure*)v->_backward)->self, ((BackwardBinaryClosure*)v->_backward)->other, v);
+            // }
         }
     }
 

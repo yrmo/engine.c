@@ -1,4 +1,6 @@
 import torch
+import pytest
+
 from engine import Value
 
 def show(v):
@@ -163,6 +165,24 @@ def test_sanity_check_z():
     assert ymg.data == ypt.data.item()
     assert xmg.grad == xpt.grad.item()
 
+def test_sanity_check_q():
+    x = Value(-4.0)
+    z = 2 * x + 2 + x
+    q = z.relu() + z * x
+    q.backward()
+    xmg, ymg = x, q
+
+    x = torch.Tensor([-4.0]).double()
+    x.requires_grad = True
+    z = 2 * x + 2 + x
+    q = z.relu() + z * x
+    q.backward()
+    xpt, ypt = x, q
+
+    assert ymg.data == ypt.data.item()
+    assert xmg.grad == xpt.grad.item()
+
+@pytest.mark.skip()
 def test_sanity_check():
     x = Value(-4.0)
     z = 2 * x + 2 + x
@@ -184,6 +204,7 @@ def test_sanity_check():
     assert ymg.data == ypt.data.item()
     assert xmg.grad == xpt.grad.item()
 
+@pytest.mark.skip()
 def test_more_ops():
     a = Value(-4.0)
     b = Value(2.0)

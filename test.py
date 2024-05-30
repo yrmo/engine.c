@@ -176,6 +176,28 @@ def test_backward_relu():
 
 test_backward_relu()
 
+def test_sanity_check_z():
+
+    x = Value(-4.0)
+    z = 2 * x + 2 + x
+    z.backward()
+    xmg, ymg = x, z
+
+    x = torch.Tensor([-4.0]).double()
+    x.requires_grad = True
+    z = 2 * x + 2 + x
+    z.backward()
+    xpt, ypt = x, z
+
+    # forward pass went well
+    print(ymg.data, ypt.data.item())
+    assert ymg.data == ypt.data.item()
+    # backward pass went well
+    print(xmg.grad, xpt.grad.item())
+    assert xmg.grad == xpt.grad.item()
+
+test_sanity_check_z()
+
 def test_sanity_check():
 
     x = Value(-4.0)

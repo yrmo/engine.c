@@ -182,7 +182,6 @@ def test_sanity_check_q():
     assert ymg.data == ypt.data.item()
     assert xmg.grad == xpt.grad.item()
 
-@pytest.mark.skip()
 def test_sanity_check():
     x = Value(-4.0)
     z = 2 * x + 2 + x
@@ -204,7 +203,6 @@ def test_sanity_check():
     assert ymg.data == ypt.data.item()
     assert xmg.grad == xpt.grad.item()
 
-@pytest.mark.skip()
 def test_more_ops():
     a = Value(-4.0)
     b = Value(2.0)

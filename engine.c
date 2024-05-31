@@ -32,8 +32,8 @@ double sub_op(double a, double b) { return a - b; }
 double mul_op(double a, double b) { return a * b; }
 double div_op(double a, double b) { return a / b; }
 double pow_op(double a, double b) { return pow(a, b); }
-double neg_op(double a) { return -1 * a; }
-double relu_op(double a) {return (a > 0) ? a : 0; }
+double neg_op(double a, double b) { return -1 * a; }
+double relu_op(double a, double b) {return (a > 0) ? a : 0; }
 
 void backward_add(ValueObject* self, ValueObject* other, ValueObject* out) {
     self->grad += out->grad;
@@ -65,7 +65,7 @@ void backward_neg(ValueObject* self, ValueObject* other, ValueObject* out) {
 }
 
 void backward_relu(ValueObject* self, ValueObject* other, ValueObject* out) {
-    self->grad += ((self->data > 0) ? 1.0 : 0) * out->grad;
+    self->grad += ((self->data > 0.0) ? 1.0 : 0.0) * out->grad;
 }
 
 BackwardBinaryClosure* binary_closure(backward_binary_function func, ValueObject* self, ValueObject* other) {
@@ -207,7 +207,7 @@ static PyObject* Value_neg(PyObject* self) {
     if (dummy == NULL) {
         return NULL;
     }
-    PyObject* result = Value_binary_op(self, dummy, pow_op, "~", backward_neg);
+    PyObject* result = Value_binary_op(self, dummy, neg_op, "~", backward_neg);
     Py_DECREF(dummy);
     return result;
     // return Value_unary_op(self, neg_op, "~", backward_neg);
@@ -218,7 +218,7 @@ static PyObject* Value_relu(PyObject* self) {
     if (dummy == NULL) {
         return NULL;
     }
-    PyObject* result = Value_binary_op(self, dummy, pow_op, "R", backward_relu);
+    PyObject* result = Value_binary_op(self, dummy, relu_op, "R", backward_relu);
     Py_DECREF(dummy);
     return result;
     // return Value_unary_op(self, relu_op, "R", backward_relu);
